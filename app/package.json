@@ -1,0 +1,17 @@
+{
+  "name": "thetalkgroups-api",
+  "version": "0.0.1",
+  "main": "dist/main.js",
+  "scripts": {
+    "postinstall": "typings install",
+    "build": "tsc",
+    "start": "node dist/main.js"
+  },
+  "keywords": [],
+  "author": "mathias hansen",
+  "license": "UNLICEDSED",
+  "devDependencies": {
+    "typescript": "^2.0.3",
+    "typings": "^1.4.0"
+  }
+}
