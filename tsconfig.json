@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "outDir": "dist",
+        "target": "es2015",
+        "noUnusedParameters": true,
+        "noImplicitAny": true,
+        "forceConsistentCasingInFileNames": true,
+        "module": "commonjs",
+        "moduleResolution": "node"
+    },
+    "include": [
+        "src/**/*.ts",
+        "typings/index.d.ts"
+    ]
+}

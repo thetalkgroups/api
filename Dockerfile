@@ -1,8 +1,9 @@
 FROM node:latest
 
-COPY ./app/src /app/src
-COPY ./app/package.json /app/package.json
-COPY ./app/tsconfig.json /app/tsconfig.json
+COPY ./src /app/src
+COPY ./package.json /app/package.json
+COPY ./tsconfig.json /app/tsconfig.json
+COPY ./typings.json /app/typings.json
 WORKDIR /app
 
 RUN npm install

@@ -1,0 +1,12 @@
+{
+  "name": "thetalkgroups-api",
+  "dependencies": {
+    "body-parser": "registry:npm/body-parser#1.15.2+20160815132839",
+    "cors": "registry:npm/cors#2.7.0+20160902012746",
+    "express": "registry:npm/express#4.14.0+20160925001530",
+    "mongodb": "registry:npm/mongodb#2.1.0+20160721204323"
+  },
+  "globalDependencies": {
+    "node": "registry:dt/node#6.0.0+20161006230116"
+  }
+}
