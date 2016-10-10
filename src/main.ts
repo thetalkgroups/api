@@ -5,6 +5,7 @@ import { Request } from "./types/request";
 import * as cors from "cors";
 
 import { itemRouter } from "./item-router"
+import fileRouter from "./file-router"
 
 new MongoClient().connect("mongodb://localhost:27017/ttg").then(db => {
     const app = express();
@@ -13,6 +14,9 @@ new MongoClient().connect("mongodb://localhost:27017/ttg").then(db => {
 
     app.use("/group/:group/questions", itemRouter("questions", db));
     
+    app.use("/files", fileRouter);
+    
+
     app.use((_: Request, res: express.Response) => {
         res.status(500).send("error");
     })
