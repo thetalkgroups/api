@@ -15,7 +15,10 @@
     "cors": "^2.8.1",
     "express": "^4.14.0",
     "express-async-wrap": "^1.0.0",
-    "mongodb": "^2.2.10"
+    "express-fileupload": "0.0.5",
+    "mongodb": "^2.2.10",
+    "multiparty": "^4.1.2",
+    "mz": "^2.4.0"
   },
   "devDependencies": {
     "typescript": "^2.0.3",

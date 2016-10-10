@@ -4,9 +4,11 @@
     "body-parser": "registry:npm/body-parser#1.15.2+20160815132839",
     "cors": "registry:npm/cors#2.7.0+20160902012746",
     "express": "registry:npm/express#4.14.0+20160925001530",
-    "mongodb": "registry:npm/mongodb#2.1.0+20160721204323"
+    "mongodb": "registry:npm/mongodb#2.1.0+20160721204323",
+    "mz": "registry:npm/mz#2.4.0+20160911015431"
   },
   "globalDependencies": {
+    "multiparty": "registry:dt/multiparty#0.0.0+20160928124223",
     "node": "registry:dt/node#6.0.0+20161006230116"
   }
 }
