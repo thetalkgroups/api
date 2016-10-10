@@ -112,7 +112,7 @@ export const itemRouter = (collectionName: string, db: Db) => {
         res.send(await replyCollection
             .find(
                 { itemId: new ObjectID(itemId), _id: { $in: ids.map(id => new ObjectID(id)) }},
-                { "answer": 1, "date": 1, "user.name": 1, "user.photo": 1 } 
+                { "answer": 1, "image": 1, "date": 1, "user.name": 1, "user.photo": 1 } 
             )
             .toArray());
     }));
@@ -133,15 +133,14 @@ export const itemRouter = (collectionName: string, db: Db) => {
     }));
     router.put("/:itemId/replys", wrap(async (req, res): Promise<void> => {
         const { itemId } = req.params;
-        const { answer, user }: { answer: string, user: User } = req.body;
+        const { answer, user, image }: { answer: string, user: User, image: { filename: string, mimeType: string } } = req.body;
 
-        
         if (itemId.length !== 24)
             throw `"${itemId}" is not a valid id`;
 
         res.setHeader("Content-Type", "text/text");
 
-        await replyCollection.insertOne({ answer, user, date: Date.now(), itemId: new ObjectID(itemId) });
+        await replyCollection.insertOne({ answer, user, date: Date.now(), itemId: new ObjectID(itemId), image });
 
         res.send("OK");
     }));
