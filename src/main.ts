@@ -12,7 +12,7 @@ new MongoClient().connect("mongodb://localhost:27017/ttg").then(db => {
 
     app.use(cors({ origin: "*" }));
 
-    app.use("/group/:group/questions", itemRouter("questions", db));
+    app.use("/group/tch/questions", itemRouter("questions", "thc", db));
     
     app.use("/files", fileRouter);
     

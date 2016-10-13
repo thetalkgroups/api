@@ -14,11 +14,9 @@ const getSkipAndLimit = (page: number) => {
     return { skip, limit }  
 }
 
-const getGroup = (baseUrl: string) => baseUrl.match(/\/group\/(\w+)/)[1]
-
-export const itemRouter = (collectionName: string, db: Db) => {
-    const itemCollection = db.collection(collectionName);
-    const replyCollection = db.collection(`${collectionName.replace(/s$/, "")}-replys`);
+export const itemRouter = (collectionName: string, group: string, db: Db) => {
+    const itemCollection = db.collection(`${group}-${collectionName}`);
+    const replyCollection = db.collection(`${group}-${collectionName.replace(/s$/, "")}-replys`);
     const router = Router();
 
     router.use(bodyParser.json());
@@ -55,20 +53,18 @@ export const itemRouter = (collectionName: string, db: Db) => {
             .toArray());
     }));
     router.get("/list/:page", wrap(async (req, res): Promise<void> => {
-        const group = getGroup(req.baseUrl);
         const page = parseInt(req.params["page"], 10) || 1;
         const { skip, limit } = getSkipAndLimit(page);
 
         res.setHeader("Content-Type", "application/json");
 
         res.send(await itemCollection
-            .find({ group }, { _id: 1 })
+            .find({}, { _id: 1 })
             .skip(skip).limit(limit)
             .toArray().then(qs => qs.map(q => q._id)));
     }));
     router.put("/", wrap(async (req, res): Promise<void> => {
-        const group = getGroup(req.baseUrl);
-        const { title, content, user }: { title: string, content: string, user: User } = req.body;
+        const { title, content, user }: { title: string, content: { [key: string]: string }, user: User } = req.body;
 
         res.setHeader("Content-Type", "text/text");
 
@@ -76,7 +72,6 @@ export const itemRouter = (collectionName: string, db: Db) => {
             title, 
             content, 
             user, 
-            group, 
             date: Date.now() 
         });
 
