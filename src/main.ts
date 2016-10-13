@@ -15,7 +15,6 @@ new MongoClient().connect("mongodb://localhost:27017/ttg").then(db => {
     app.use("/group/thc/questions", itemRouter("questions", "thc", db));
     
     app.use("/files", fileRouter);
-    
 
     app.use((_: Request, res: express.Response) => {
         res.status(500).send("error");

@@ -26,8 +26,6 @@ fileRouter.get("/:filename", wrap(async (req: Request, res: Response) => {
     res.setHeader("Cache-Control", "max-age=31536000");
     res.setHeader("Content-Type", mimeTypes[extension]);
 
-    console.log(filename);
-
     res.send(file);
 }));
 

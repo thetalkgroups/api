@@ -1,6 +1,6 @@
 import { Request as ExpressRequest } from "express"
 
 export interface Request extends ExpressRequest {
-    body: any
+    body: { [key: string]: any }
     files: any
 }
