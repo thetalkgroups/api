@@ -224,6 +224,25 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
 
         res.send("OK");
     }));
+
+    router.put("/sticky/:itemId", wrap(async (req, res)=> {
+        const { itemId } = req.params;
+        const value = req.body as boolean;
+        const userId = req.header("Authorization");
+        const isAdmin = !!adminUsers.find(id => id === userId);
+
+        if (!isAdmin) {
+            res.status(403).send("not authorized");
+            return;
+        }
+
+        await itemCollection.updateOne(
+            { _id: new ObjectID(itemId) }, 
+            { $set: { sticky: value }}
+        );
+
+        res.send("OK");
+    }));
     
     return router;
 }
