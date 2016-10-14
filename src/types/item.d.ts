@@ -8,7 +8,7 @@ interface Item {
     content: { [key: string]: any }
     fields: string[]
     sticky?: boolean
-    isYou: boolean
+    permission: string
 }
 
 interface Reply {
@@ -18,5 +18,5 @@ interface Reply {
     date: number
     answer: string
     image: string
-    isYou: boolean
+    permission: string
 }

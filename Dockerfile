@@ -10,4 +10,4 @@ RUN npm install
 RUN npm run build
 ENTRYPOINT npm start
 
-EXPOSE 80
+EXPOSE 8000

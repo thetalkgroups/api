@@ -14,11 +14,30 @@ const getSkipAndLimit = (page: number) => {
     return { skip, limit }  
 }
 
+const setPermissionFactory = (adminUsers: string[]) => (userId: string, item: { user: User, permission: string }) => {
+    if (item.user.id === userId) {
+        item.permission = "you";
+    }
+    else if (!!adminUsers.find(id => id == userId)) {
+        item.permission = "admin";
+    }
+    else {
+        item.permission = "none";
+    }
+
+    delete item.user.id
+
+    return item; 
+}
+
 const SORT = { sticky: -1, date: -1 }
 
-export const itemRouter = (collectionName: string, group: string, db: Db) => {
+export const itemRouterFactory = async (collectionName: string, group: string, db: Db) => {
     const itemCollection = db.collection(`${group}-${collectionName}`);
     const replyCollection = db.collection(`${group}-${collectionName.replace(/s$/, "")}-replys`);
+    const userCollection = db.collection("users");
+    const adminUsers = (await userCollection.find({ permission: "admin" }).toArray()).map(user => user.id) as string[]
+    const setPermission = setPermissionFactory(adminUsers);
     const router = Router();
 
     router.use(bodyParser.json());
@@ -35,21 +54,20 @@ export const itemRouter = (collectionName: string, group: string, db: Db) => {
         res.send(await itemCollection
             .find(
                 { _id: new ObjectID(itemId) }, 
-                { "title": 1, "content": 1, "date": 1, "user.name": 1, "user.photo": 1, "user.id": 1 })
+                { 
+                    "title": 1, 
+                    "content": 1, 
+                    "date": 1, 
+                    "user.name": 1, 
+                    "user.photo": 1,
+                    "user.id": 1 
+                }
+            )
             .limit(1)
             .toArray()
-            .then(qs => {
-                const question = qs[0] as Item;
-
-                if (question.user.id === userId) {
-                    question.isYou = true;
-                }
-
-                delete question.user.id
-
-                return question; 
-            }));
+            .then(async qs => setPermission(userId, qs[0])));
     }));
+
     router.post("/", wrap(async (req, res) => {
         const ids: string[] = req.body as string[];
 
@@ -67,6 +85,7 @@ export const itemRouter = (collectionName: string, group: string, db: Db) => {
             .sort(SORT)
             .toArray());
     }));
+
     router.get("/list/:page", wrap(async (req, res) => {
         const page = parseInt(req.params["page"], 10) || 1;
         const { skip, limit } = getSkipAndLimit(page);
@@ -79,8 +98,14 @@ export const itemRouter = (collectionName: string, group: string, db: Db) => {
             .skip(skip).limit(limit)
             .toArray().then(qs => qs.map(q => q._id)));
     }));
+
+    interface PutBody { 
+        title: string, 
+        content: { [key: string]: string }, 
+        user: User 
+    }
     router.put("/", wrap(async (req, res) => {
-        const { title, content, user } = req.body as { title: string, content: { [key: string]: string }, user: User };
+        const { title, content, user } = req.body as PutBody;
 
         res.setHeader("Content-Type", "text/text");
 
@@ -93,6 +118,7 @@ export const itemRouter = (collectionName: string, group: string, db: Db) => {
 
         res.send("OK");
     }));
+
     router.delete("/:itemId", wrap(async (req, res) => {
         const { itemId } = req.params;
         const userId = req.header("Authorization");
@@ -124,20 +150,23 @@ export const itemRouter = (collectionName: string, group: string, db: Db) => {
 
         res.send(await replyCollection
             .find(
-                { itemId: new ObjectID(itemId), _id: { $in: ids.map(id => new ObjectID(id)) }},
-                { "answer": 1, "image": 1, "date": 1, "user.name": 1, "user.photo": 1, "user.id": 1 } 
+                { 
+                    itemId: new ObjectID(itemId), 
+                    _id: { $in: ids.map(id => new ObjectID(id)) }
+                },
+                { 
+                    "answer": 1, 
+                    "image": 1, 
+                    "date": 1, 
+                    "user.name": 1, 
+                    "user.photo": 1, 
+                    "user.id": 1 
+                } 
             )
             .toArray()
-            .then((replys: Reply[]) => replys.map(reply => {
-                if (reply.user.id = userId) {
-                    reply.isYou = true;
-                }
-
-                delete reply.user.id;
-
-                return reply;
-            })));
+            .then((replys: Reply[]) => replys.map(r => setPermission(userId, r))));
     }));
+
     router.get("/:itemId/replys/list/:page", wrap(async (req, res) => {
         const { itemId } = req.params;
         const page = parseInt(req.params["page"], 10) || 1;
@@ -153,19 +182,32 @@ export const itemRouter = (collectionName: string, group: string, db: Db) => {
             .skip(skip).limit(limit)
             .toArray().then(rs => rs.map(r => r._id)));
     }));
+
+    interface ReplyPutBody { 
+        answer: string, 
+        user: User, 
+        image: { filename: string, mimeType: string } 
+    }
     router.put("/:itemId/replys", wrap(async (req, res) => {
         const { itemId } = req.params;
-        const { answer, user, image } = req.body as { answer: string, user: User, image: { filename: string, mimeType: string } };
+        const { answer, user, image } = req.body as ReplyPutBody;
 
         if (itemId.length !== 24)
             throw `"${itemId}" is not a valid id`;
 
         res.setHeader("Content-Type", "text/text");
 
-        await replyCollection.insertOne({ answer, user, date: Date.now(), itemId: new ObjectID(itemId), image });
+        await replyCollection.insertOne({ 
+            answer, 
+            user, 
+            date: Date.now(), 
+            itemId: new ObjectID(itemId), 
+            image 
+        });
 
         res.send("OK");
     }));
+
     router.delete("/:itemId/replys/:replyId", wrap(async (req, res) => {
         const { replyId } = req.params;
         const userId = req.header("Authorization");
@@ -175,11 +217,13 @@ export const itemRouter = (collectionName: string, group: string, db: Db) => {
 
         res.setHeader("Content-Type", "text/text");
 
-        await replyCollection.remove({ _id: new ObjectID(replyId), "user.id": userId });
+        await replyCollection.remove({ 
+            _id: new ObjectID(replyId), 
+            "user.id": userId 
+        });
 
         res.send("OK");
     }));
     
     return router;
 }
-
