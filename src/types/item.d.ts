@@ -1,5 +1,3 @@
-/// <reference path="./user.d.ts" />
-
 interface Item {
     _id: string
     user: User

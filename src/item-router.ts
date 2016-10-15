@@ -1,43 +1,59 @@
 import { Response, Router, RequestHandler } from "express"
 import { Db, ObjectID } from "mongodb"
 import * as bodyParser from "body-parser";
+import "./map-keys"
 
 import { Request } from "./types/request"
 
-const wrap: (listener: (req: Request, res: Response) => Promise<void>) => RequestHandler = require("express-async-wrap")
+const wrap: (listener: (req: Request, res: Response) => Promise<void>) => RequestHandler = require("express-async-wrap");
 
-const PAGE_LENGTH = 10;
-const getSkipAndLimit = (page: number) => {
-    const skip = (page - 1) * PAGE_LENGTH;
-    const limit = skip + PAGE_LENGTH;
+const pageLength = 1;
+const getPaginationData = (page: number, itemCount: number) => {
+    const skip = (page - 1) * pageLength;
+    const limit = skip + pageLength;
+    const numberOfPages = Math.ceil(itemCount / pageLength);
 
-    return { skip, limit }  
-}
+    return { skip, limit, numberOfPages };  
+};
+const validateId = (id: string) => {
+    if (id.length !== 24) throw `"${id}" is not a valid id`;
+};
+const getPermissionFactory = (adminUsers: string[]) => (userId: string, itemId: string) => {
+    if ((!!adminUsers.find(id => id == userId))) return "admin";
+    if (itemId === userId) return "you";
+    return "none";
+};
+const escapeHtml = (content: any) => {
+    if (typeof content === "string")
+        return content.replace(/</g, "&lt;");
 
-const setPermissionFactory = (adminUsers: string[]) => (userId: string, item: { user: User, permission: string }) => {
-    if (item.user.id === userId) {
-        item.permission = "you";
-    }
-    else if (!!adminUsers.find(id => id == userId)) {
-        item.permission = "admin";
-    }
-    else {
-        item.permission = "none";
-    }
+    return content;
+};
 
-    delete item.user.id
-
-    return item; 
-}
-
-const SORT = { sticky: -1, date: -1 }
+const SORT = { sticky: -1, date: -1 };
 
 export const itemRouterFactory = async (collectionName: string, group: string, db: Db) => {
     const itemCollection = db.collection(`${group}-${collectionName}`);
     const replyCollection = db.collection(`${group}-${collectionName.replace(/s$/, "")}-replys`);
     const userCollection = db.collection("users");
-    const adminUsers = (await userCollection.find({ permission: "admin" }).toArray()).map(user => user.id) as string[]
-    const setPermission = setPermissionFactory(adminUsers);
+    const isAdmin = (userId: string) => !!adminUsers.find(id => id === userId);
+    const authorizeQuery = (userId: string, query: any) => {
+        if (isAdmin(userId)) return query;
+
+        query["user.id"] = userId;
+
+        return query;
+    }
+    const adminUsers = (await userCollection.find({ permission: "admin" }).toArray())
+        .map(user => user._id) as string[];
+    const getPermission = getPermissionFactory(adminUsers);
+    const setPermission = (userId: string) => (item: { user: User, permission: string }) => {
+        item.permission = getPermission(userId, item.user.id);
+
+        delete item.user.id
+
+        return item;
+    };
     const router = Router();
 
     router.use(bodyParser.json());
@@ -46,58 +62,71 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
         const { itemId } = req.params;
         const userId = req.header("Authorization"); 
 
-        if (itemId.length !== 24)
-            throw `"${itemId}" is not a valid id`;
+        validateId(itemId);
 
         res.setHeader("Content-Type", "application/json");
 
-        res.send(await itemCollection
+        const item = await itemCollection
             .find(
-                { _id: new ObjectID(itemId) }, 
+                { "_id": new ObjectID(itemId) }, 
                 { 
                     "title": 1, 
                     "content": 1, 
                     "date": 1, 
                     "user.name": 1, 
                     "user.photo": 1,
-                    "user.id": 1 
+                    "user.id": 1,
+                    "sticky": 1
                 }
             )
             .limit(1)
             .toArray()
-            .then(async qs => setPermission(userId, qs[0])));
+            .then(qs => qs[0] as Item)
+            .then(setPermission(userId));
+
+        res.send(item);
     }));
 
-    router.post("/", wrap(async (req, res) => {
+    
+    const getAll = wrap(async (req, res) => {
         const ids: string[] = req.body as string[];
 
-        ids.forEach(id => {
-            if (id.length !== 24)
-                throw `"${id}" is not a valid id`;
-        });
+        ids.forEach(validateId);
 
         res.setHeader("Content-Type", "application/json");
 
-        res.send(await itemCollection
+        const items = await itemCollection
             .find(
-                { _id: { $in: ids.map(id => new ObjectID(id)) }},
-                { "title": 1, "user.name": 1, "date": 1, "sticky": 1 })
+                { "_id": { "$in": ids.map(id => new ObjectID(id)) }},
+                { "title": 1, "user.name": 1, "date": 1 })
             .sort(SORT)
-            .toArray());
-    }));
+            .toArray();
 
-    router.get("/list/:page", wrap(async (req, res) => {
-        const page = parseInt(req.params["page"], 10) || 1;
-        const { skip, limit } = getSkipAndLimit(page);
+        res.send(items);
+    });
+    router.post("/", getAll);
+    router.post("/sticky/", getAll);
+
+    const listFactory = (sticky: boolean) => wrap(async (req, res) => {
+        let [ page, offset ]: any[] = req.params["page"].split("-");
+        page = parseInt(page, 10) || 1;
+        offset = parseInt(offset, 10) || 0;
+        const itemCount = await itemCollection.count({})
+        const { skip, limit, numberOfPages } = getPaginationData(page, itemCount);
 
         res.setHeader("Content-Type", "application/json");
 
-        res.send(await itemCollection
-            .find({}, { _id: 1 })
+        const ids = await itemCollection
+            .find({ sticky }, { "_id": 1 })
             .sort(SORT)
-            .skip(skip).limit(limit)
-            .toArray().then(qs => qs.map(q => q._id)));
-    }));
+            .skip(skip).limit(limit - offset)
+            .toArray()
+            .then(items => items.map(item => item._id));
+
+        res.send({ ids, numberOfPages });
+    })
+    router.get("/list/:page", listFactory(false));
+    router.get("/sticky/list/:page", listFactory(true));
 
     interface PutBody { 
         title: string, 
@@ -110,10 +139,11 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
         res.setHeader("Content-Type", "text/text");
 
         await itemCollection.insertOne({ 
-            title, 
-            content, 
+            title: escapeHtml(title), 
+            content: Object.mapKeys(content, (_, value) => escapeHtml(value)), 
             user, 
-            date: Date.now() 
+            "date": Date.now(),
+            sticky: false
         });
 
         res.send("OK");
@@ -123,13 +153,17 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
         const { itemId } = req.params;
         const userId = req.header("Authorization");
 
-        if (itemId.length !== 24)
-            throw `"${itemId}" is not a valid id`;
+        validateId(itemId);
 
         res.setHeader("Content-Type", "text/text");
 
-        await itemCollection.remove({ _id: new ObjectID(itemId), "user.id": userId });
-        await replyCollection.remove({ itemId: new ObjectID(itemId) });
+        await itemCollection.remove(authorizeQuery(userId, { "_id": new ObjectID(itemId) }))
+            .then(result => {
+                // if n is 1 the item has been removed, and you are authorized to remove it, 
+                // thus you can remove the replys connected to the removed item 
+                if (result.result.n === 1) 
+                    return replyCollection.remove({ "itemId": new ObjectID(itemId) });
+            });
 
         res.send("OK");
     }));
@@ -139,20 +173,16 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
         const ids: string[] = req.body as string[];
         const userId = req.header("Authorization");
 
-        if (itemId.length !== 24)
-            throw `"${itemId}" is not a valid id`;
-        ids.forEach(id => {
-            if (id.length !== 24)
-                throw `"${id}" is not a valid id`;
-        });
+        validateId(itemId);
+        ids.forEach(validateId);
 
         res.setHeader("Content-Type", "application/json");
 
-        res.send(await replyCollection
+        const selectedReplys = await replyCollection
             .find(
                 { 
-                    itemId: new ObjectID(itemId), 
-                    _id: { $in: ids.map(id => new ObjectID(id)) }
+                    "itemId": new ObjectID(itemId), 
+                    "_id": { "$in": ids.map(id => new ObjectID(id)) }
                 },
                 { 
                     "answer": 1, 
@@ -164,23 +194,28 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
                 } 
             )
             .toArray()
-            .then((replys: Reply[]) => replys.map(r => setPermission(userId, r))));
+            .then((replys: Reply[]) => replys.map(setPermission(userId)));
+
+        res.send(selectedReplys);
     }));
 
     router.get("/:itemId/replys/list/:page", wrap(async (req, res) => {
         const { itemId } = req.params;
         const page = parseInt(req.params["page"], 10) || 1;
-        const { skip, limit } = getSkipAndLimit(page);
+        const replyCount = await replyCollection.count({});
+        const { skip, limit, numberOfPages } = getPaginationData(page, replyCount);
 
-        if (itemId.length !== 24)
-            throw `"${itemId}" is not a valid id`;
+        validateId(itemId);
 
         res.setHeader("Content-Type", "application/json");
 
-        res.send(await replyCollection
-            .find({ itemId: new ObjectID(itemId) }, { _id: 1 })
+        const ids = await replyCollection
+            .find({ "itemId": new ObjectID(itemId) }, { "_id": 1 })
             .skip(skip).limit(limit)
-            .toArray().then(rs => rs.map(r => r._id)));
+            .toArray()
+            .then(replys => replys.map(r => r._id));
+
+        res.send({ ids, numberOfPages });
     }));
 
     interface ReplyPutBody { 
@@ -192,17 +227,16 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
         const { itemId } = req.params;
         const { answer, user, image } = req.body as ReplyPutBody;
 
-        if (itemId.length !== 24)
-            throw `"${itemId}" is not a valid id`;
+        validateId(itemId);
 
         res.setHeader("Content-Type", "text/text");
 
         await replyCollection.insertOne({ 
-            answer, 
+            answer: escapeHtml(answer), 
             user, 
-            date: Date.now(), 
-            itemId: new ObjectID(itemId), 
-            image 
+            image, 
+            "date": Date.now(), 
+            "itemId": new ObjectID(itemId), 
         });
 
         res.send("OK");
@@ -212,33 +246,44 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
         const { replyId } = req.params;
         const userId = req.header("Authorization");
 
-        if (replyId.length !== 24)
-            throw `"${replyId}" is not a valid id`;
+        validateId(replyId);
 
         res.setHeader("Content-Type", "text/text");
 
-        await replyCollection.remove({ 
-            _id: new ObjectID(replyId), 
-            "user.id": userId 
-        });
+        await replyCollection.remove(authorizeQuery(userId, { "_id": new ObjectID(replyId) }));
 
         res.send("OK");
     }));
 
-    router.put("/sticky/:itemId", wrap(async (req, res)=> {
+    router.get("/:itemId/sticky", wrap(async (req, res) => {
         const { itemId } = req.params;
-        const value = req.body as boolean;
-        const userId = req.header("Authorization");
-        const isAdmin = !!adminUsers.find(id => id === userId);
+        
+        validateId(itemId);
 
-        if (!isAdmin) {
+        const sticky = await itemCollection
+            .find({ "_id": new ObjectID(itemId) }, { "sticky": 1 })
+            .limit(1)
+            .toArray()
+            .then(items => items[0].sticky);
+
+        res.send(sticky);
+    }))
+
+    router.post("/:itemId/sticky", wrap(async (req, res) => {
+        const { value } = req.body as { value: boolean }; 
+        const { itemId } = req.params;
+        const userId = req.header("Authorization");
+        
+        validateId(itemId);
+
+        if (!isAdmin(userId)) {
             res.status(403).send("not authorized");
             return;
         }
 
         await itemCollection.updateOne(
-            { _id: new ObjectID(itemId) }, 
-            { $set: { sticky: value }}
+            { "_id": new ObjectID(itemId) }, 
+            { "$set": { "sticky": !value }}
         );
 
         res.send("OK");
