@@ -56,6 +56,9 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
     };
     const router = Router();
 
+    let itemCount = await itemCollection.count({});
+    let replyCount = await replyCollection.count({});
+
     router.use(bodyParser.json());
 
     router.get("/:itemId", wrap(async (req, res): Promise<void> => {
@@ -87,7 +90,6 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
         res.send(item);
     }));
 
-    
     const getAll = wrap(async (req, res) => {
         const ids: string[] = req.body as string[];
 
@@ -111,7 +113,6 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
         let [ page, offset ]: any[] = req.params["page"].split("-");
         page = parseInt(page, 10) || 1;
         offset = parseInt(offset, 10) || 0;
-        const itemCount = await itemCollection.count({})
         const { skip, limit, numberOfPages } = getPaginationData(page, itemCount);
 
         res.setHeader("Content-Type", "application/json");
@@ -146,6 +147,8 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
             sticky: false
         });
 
+        itemCount += 1;
+
         res.send("OK");
     }));
 
@@ -164,6 +167,8 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
                 if (result.result.n === 1) 
                     return replyCollection.remove({ "itemId": new ObjectID(itemId) });
             });
+
+        itemCount -= 1;
 
         res.send("OK");
     }));
@@ -202,7 +207,6 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
     router.get("/:itemId/replys/list/:page", wrap(async (req, res) => {
         const { itemId } = req.params;
         const page = parseInt(req.params["page"], 10) || 1;
-        const replyCount = await replyCollection.count({});
         const { skip, limit, numberOfPages } = getPaginationData(page, replyCount);
 
         validateId(itemId);
@@ -239,6 +243,8 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
             "itemId": new ObjectID(itemId), 
         });
 
+        replyCount += 1;
+
         res.send("OK");
     }));
 
@@ -251,6 +257,8 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
         res.setHeader("Content-Type", "text/text");
 
         await replyCollection.remove(authorizeQuery(userId, { "_id": new ObjectID(replyId) }));
+
+        replyCount -= 1;
 
         res.send("OK");
     }));
