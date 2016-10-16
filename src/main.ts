@@ -15,21 +15,21 @@ new MongoClient().connect("mongodb://localhost:27017/ttg").then(async db => {
 
     const app = express();
 
-    app.use(cors({ origin: "*" }));
+    app.use(cors({ origin: "http://localhost:4000" }));
 
-    app.use(wrap(async (req, res, next) => {
-        const userId = req.header("Authorization");
-        const bannedUsers = (await userCollection.find({ permission: "banned" }).toArray()) as { _id: string, permission: string }[];
-        const userIsBanned = !!bannedUsers.find(user => userId === user._id);
+    // app.use(wrap(async (req, res, next) => {
+    //     const userId = req.header("Authorization");
+    //     const bannedUsers = (await userCollection.find({ permission: "banned" }).toArray()) as { _id: string, permission: string }[];
+    //     const userIsBanned = !!bannedUsers.find(user => userId === user._id);
 
-        if (userIsBanned) {
-            res.status(403).send("you have been banned");
+    //     if (userIsBanned) {
+    //         res.status(403).send("you have been banned");
 
-            return;
-        }
+    //         return;
+    //     }
 
-        next();
-    }));
+    //     next();
+    // }));
 
     app.use("/thc/questions", itemRouter);
 
@@ -38,5 +38,5 @@ new MongoClient().connect("mongodb://localhost:27017/ttg").then(async db => {
     app.use((_: Request, res: express.Response) =>
         res.status(500).send("error"));
 
-    createServer(app as any).listen(4001, () => console.log("listening"));
+    createServer(app as any).listen(8000, () => console.log("listening"));
 })
