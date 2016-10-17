@@ -1,9 +1,11 @@
 import { Response, Router, RequestHandler } from "express"
 import { Db, ObjectID } from "mongodb"
 import * as bodyParser from "body-parser";
-import "./map-keys"
+import { updateAll } from "./object-helpers"
+
 
 import { Request } from "./types/request"
+import { users } from "./users"
 
 const wrap: (listener: (req: Request, res: Response) => Promise<void>) => RequestHandler = require("express-async-wrap");
 
@@ -18,11 +20,7 @@ const getPaginationData = (page: number, itemCount: number) => {
 const validateId = (id: string) => {
     if (id.length !== 24) throw `"${id}" is not a valid id`;
 };
-const getPermissionFactory = (adminUsers: string[]) => (userId: string, itemId: string) => {
-    if ((!!adminUsers.find(id => id == userId))) return "admin";
-    if (itemId === userId) return "you";
-    return "none";
-};
+
 const escapeHtml = (content: any) => {
     if (typeof content === "string")
         return content.replace(/</g, "&lt;");
@@ -32,32 +30,15 @@ const escapeHtml = (content: any) => {
 
 const SORT = { sticky: -1, date: -1 };
 
-export const itemRouterFactory = async (collectionName: string, group: string, db: Db) => {
+export const itemRouterFactory = async (collectionName: string, group: string, users: users, db: Db) => {
     const itemCollection = db.collection(`${group}-${collectionName}`);
-    const replyCollection = db.collection(`${group}-${collectionName.replace(/s$/, "")}-replys`);
-    const userCollection = db.collection("users");
-    const isAdmin = (userId: string) => !!adminUsers.find(id => id === userId);
-    const authorizeQuery = (userId: string, query: any) => {
-        if (isAdmin(userId)) return query;
-
-        query["user.id"] = userId;
-
-        return query;
-    }
-    const adminUsers = (await userCollection.find({ permission: "admin" }).toArray())
-        .map(user => user._id) as string[];
-    const getPermission = getPermissionFactory(adminUsers);
-    const setPermission = (userId: string) => (item: { user: User, permission: string }) => {
-        item.permission = getPermission(userId, item.user.id);
-
-        delete item.user.id
-
-        return item;
-    };
+    const replyCollection = db.collection(`${group}-${collectionName}-replys`);
+    
     const router = Router();
 
     let itemCount = await itemCollection.count({});
     let replyCount = await replyCollection.count({});
+    let stickyCount = await itemCollection.count({ sticky: true });
 
     router.use(bodyParser.json());
 
@@ -84,8 +65,15 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
             )
             .limit(1)
             .toArray()
-            .then(qs => qs[0] as Item)
-            .then(setPermission(userId));
+            .then(qs => {
+                if (qs.length === 0) {
+                    res.status(404).send("item was not found");
+                    return;
+                }
+
+                return qs[0] as Item
+            })
+            .then(users.setPermission(userId));
 
         res.send(item);
     }));
@@ -110,17 +98,14 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
     router.post("/sticky/", getAll);
 
     const listFactory = (sticky: boolean) => wrap(async (req, res) => {
-        let [ page, offset ]: any[] = req.params["page"].split("-");
-        page = parseInt(page, 10) || 1;
-        offset = parseInt(offset, 10) || 0;
-        const { skip, limit, numberOfPages } = getPaginationData(page, itemCount);
-
-        res.setHeader("Content-Type", "application/json");
+        let [ page, offset ] = req.params["page"].split("-").map(s => parseInt(s, 10));
+        page = page || 1;
+        let { skip, limit, numberOfPages } = getPaginationData(page, itemCount);
 
         const ids = await itemCollection
             .find({ sticky }, { "_id": 1 })
             .sort(SORT)
-            .skip(skip).limit(limit - offset)
+            .skip(skip).limit(limit)
             .toArray()
             .then(items => items.map(item => item._id));
 
@@ -131,7 +116,7 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
 
     interface PutBody { 
         title: string, 
-        content: { [key: string]: string }, 
+        content: { [key: string]: any }, 
         user: User 
     }
     router.put("/", wrap(async (req, res) => {
@@ -141,7 +126,7 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
 
         await itemCollection.insertOne({ 
             title: escapeHtml(title), 
-            content: Object.mapKeys(content, (_, value) => escapeHtml(value)), 
+            content: updateAll(content)(escapeHtml), 
             user, 
             "date": Date.now(),
             sticky: false
@@ -160,15 +145,16 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
 
         res.setHeader("Content-Type", "text/text");
 
-        await itemCollection.remove(authorizeQuery(userId, { "_id": new ObjectID(itemId) }))
-            .then(result => {
-                // if n is 1 the item has been removed, and you are authorized to remove it, 
-                // thus you can remove the replys connected to the removed item 
-                if (result.result.n === 1) 
-                    return replyCollection.remove({ "itemId": new ObjectID(itemId) });
-            });
+        const result = await itemCollection.remove(users.authorizeQuery(userId, { "_id": new ObjectID(itemId) }))
 
-        itemCount -= 1;
+        // if n is 1 the item has been removed, and you are authorized to remove it, 
+        // thus you can remove the replys connected to the removed item 
+        if (result.result.n) {
+            itemCount -= 1;
+
+            const result = await replyCollection.remove({ "itemId": new ObjectID(itemId) });
+            replyCount -= result.result.n;
+        } 
 
         res.send("OK");
     }));
@@ -199,7 +185,7 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
                 } 
             )
             .toArray()
-            .then((replys: Reply[]) => replys.map(setPermission(userId)));
+            .then((replys: Reply[]) => replys.map(users.setPermission(userId)));
 
         res.send(selectedReplys);
     }));
@@ -256,9 +242,10 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
 
         res.setHeader("Content-Type", "text/text");
 
-        await replyCollection.remove(authorizeQuery(userId, { "_id": new ObjectID(replyId) }));
-
-        replyCount -= 1;
+        const result = await replyCollection.remove(users.authorizeQuery(userId, { "_id": new ObjectID(replyId) }))
+        if (result.result.n) {
+            replyCount -= 1;
+        }
 
         res.send("OK");
     }));
@@ -284,7 +271,11 @@ export const itemRouterFactory = async (collectionName: string, group: string, d
         
         validateId(itemId);
 
-        if (!isAdmin(userId)) {
+        if (value === false) {
+            stickyCount += 1;
+        }
+
+        if (!users.isAdmin(userId)) {
             res.status(403).send("not authorized");
             return;
         }

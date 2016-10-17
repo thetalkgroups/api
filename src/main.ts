@@ -4,39 +4,59 @@ import * as express from "express";
 import { Request } from "./types/request";
 import * as cors from "cors";
 
-import { itemRouterFactory } from "./item-router"
-import fileRouter from "./file-router"
+import { itemRouterFactory } from "./item-router";
+import fileRouter from "./file-router";
+import { userRouterFactory } from "./users-router"
+
+import { usersFactory, UserStatus } from "./users";
+
 
 const wrap: (listener: (req: Request, res: express.Response, next?: () => void) => Promise<void>) => express.RequestHandler = require("express-async-wrap");
 
 new MongoClient().connect("mongodb://localhost:27017/ttg").then(async db => {
     const userCollection = db.collection("users");
-    const itemRouter = await itemRouterFactory("questions", "thc", db);
+    const users = await usersFactory(db);
+    const itemRouter = await itemRouterFactory("questions", "thc", users, db);
+    const usersRouter = userRouterFactory(users);
 
     const app = express();
 
     app.use(cors({ origin: "http://localhost:4000" }));
 
-    // app.use(wrap(async (req, res, next) => {
-    //     const userId = req.header("Authorization");
-    //     const bannedUsers = (await userCollection.find({ permission: "banned" }).toArray()) as { _id: string, permission: string }[];
-    //     const userIsBanned = !!bannedUsers.find(user => userId === user._id);
+    app.use(wrap(async (req, res, next) => {
+        const userId = req.header("Authorization");
 
-    //     if (userIsBanned) {
-    //         res.status(403).send("you have been banned");
+        if (userId === "UNSET") return next();
 
-    //         return;
-    //     }
-
-    //     next();
-    // }));
+        switch (await users.checkUserStatus(userId)) {
+            case UserStatus.kicked:
+                return res.status(403).send("you have been kicked");
+            case UserStatus.banned:
+                return res.status(403).send("you have been kicked");
+            case UserStatus.error:
+                return res.status(403).send("no authorization header provided");
+            case UserStatus.ok:
+                return next();
+        }
+    }));
 
     app.use("/thc/questions", itemRouter);
 
     app.use("/files", fileRouter);
 
-    app.use((_: Request, res: express.Response) =>
-        res.status(500).send("error"));
+    app.use("/users", usersRouter);
+
+    app.use((error: any, _: Request, res: express.Response, next: () => void) => {
+        console.log("ERR", error);
+
+        res.status(500).send(error.constructor.name.endsWith("Error") ? error.message : error.toString());
+
+        next; 
+    });
+
+    app.use((_:Request, res: express.Response) => {
+        res.status(500).send("error");
+    })
 
     createServer(app as any).listen(8000, () => console.log("listening"));
 })
