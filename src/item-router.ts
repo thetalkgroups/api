@@ -9,13 +9,12 @@ import { users } from "./users"
 
 const wrap: (listener: (req: Request, res: Response) => Promise<void>) => RequestHandler = require("express-async-wrap");
 
-const pageLength = 1;
+const pageLength = 2;
 const getPaginationData = (page: number, itemCount: number) => {
     const skip = (page - 1) * pageLength;
-    const limit = skip + pageLength;
     const numberOfPages = Math.ceil(itemCount / pageLength);
 
-    return { skip, limit, numberOfPages };  
+    return { skip, numberOfPages };  
 };
 const validateId = (id: string) => {
     if (id.length !== 24) throw `"${id}" is not a valid id`;
@@ -98,16 +97,33 @@ export const itemRouterFactory = async (collectionName: string, group: string, u
     router.post("/sticky/", getAll);
 
     const listFactory = (sticky: boolean) => wrap(async (req, res) => {
-        let [ page, offset ] = req.params["page"].split("-").map(s => parseInt(s, 10));
+        let page = parseInt(req.params["page"], 10);
         page = page || 1;
-        let { skip, limit, numberOfPages } = getPaginationData(page, itemCount);
+        let { skip, numberOfPages } = getPaginationData(page, itemCount);
+        let limit = pageLength;
+        let ids: string[] = []
+        let none = false;
 
-        const ids = await itemCollection
-            .find({ sticky }, { "_id": 1 })
-            .sort(SORT)
-            .skip(skip).limit(limit)
-            .toArray()
-            .then(items => items.map(item => item._id));
+        if (!sticky) {
+            if (page * pageLength <= stickyCount) {
+                none = true;
+            }
+            else  {
+                const offset = Math.max(pageLength - ( page * pageLength - stickyCount), 0);
+
+                skip += offset;
+                limit -= offset;
+            }
+        }
+
+        if (!none) {
+            ids = await itemCollection
+                .find(sticky ? { sticky } : {}, { "_id": 1 })
+                .sort(SORT)
+                .skip(skip).limit(limit)
+                .toArray()
+                .then(items => items.map(item => item._id));
+        }
 
         res.send({ ids, numberOfPages });
     })
@@ -193,7 +209,7 @@ export const itemRouterFactory = async (collectionName: string, group: string, u
     router.get("/:itemId/replys/list/:page", wrap(async (req, res) => {
         const { itemId } = req.params;
         const page = parseInt(req.params["page"], 10) || 1;
-        const { skip, limit, numberOfPages } = getPaginationData(page, replyCount);
+        const { skip, numberOfPages } = getPaginationData(page, replyCount);
 
         validateId(itemId);
 
@@ -201,7 +217,7 @@ export const itemRouterFactory = async (collectionName: string, group: string, u
 
         const ids = await replyCollection
             .find({ "itemId": new ObjectID(itemId) }, { "_id": 1 })
-            .skip(skip).limit(limit)
+            .skip(skip).limit(pageLength)
             .toArray()
             .then(replys => replys.map(r => r._id));
 
