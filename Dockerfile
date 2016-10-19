@@ -5,7 +5,7 @@ COPY ./package.json /app/package.json
 COPY ./tsconfig.json /app/tsconfig.json
 COPY ./typings.json /app/typings.json
 COPY ./fix-typings.js /app/fix-typings.js
-COPY ../thetalkgroups_api_keys /app/keys
+COPY ./keys /app/keys
 WORKDIR /app
 
 RUN npm install
