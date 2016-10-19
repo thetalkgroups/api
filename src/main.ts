@@ -60,8 +60,8 @@ new MongoClient().connect("mongodb://db:27017/ttg").then(async db => {
     })
 
     createServer({
-        key: fs.readFileSync(__dirname + "/../server.key"),
-        cert: fs.readFileSync(__dirname + "/../server.crt")
+        key: fs.readFileSync(__dirname + "/../../thetalkgroups_api_keys/server.key"),
+        cert: fs.readFileSync(__dirname + "/../../thetalkgroups_api_keys/server.crt")
     }, app as any)
         .listen(8000, () => console.log("listening"));
 })
