@@ -13,7 +13,7 @@ import { usersFactory, UserStatus } from "./users";
 
 const wrap: (listener: (req: Request, res: express.Response, next?: () => void) => Promise<void>) => express.RequestHandler = require("express-async-wrap");
 
-new MongoClient().connect("mongodb://localhost:27017/ttg").then(async db => {
+new MongoClient().connect("mongodb://db:27017/ttg").then(async db => {
     const userCollection = db.collection("users");
     const users = await usersFactory(db);
     const itemRouter = await itemRouterFactory("questions", "thc", users, db);

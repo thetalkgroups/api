@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "main": "dist/main.js",
   "scripts": {
-    "postinstall": "typings install",
+    "postinstall": "typings install && node fix-typings.js",
     "build": "tsc",
     "start": "node dist/main.js"
   },

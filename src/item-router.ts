@@ -3,7 +3,6 @@ import { Db, ObjectID } from "mongodb"
 import * as bodyParser from "body-parser";
 import { updateAll } from "./object-helpers"
 
-
 import { Request } from "./types/request"
 import { users } from "./users"
 
