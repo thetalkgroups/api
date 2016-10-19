@@ -1,8 +1,9 @@
-import { createServer } from "http";
+import { createServer } from "https";
 import { MongoClient } from "mongodb";
 import * as express from "express";
 import { Request } from "./types/request";
 import * as cors from "cors";
+import * as fs from "fs";
 
 import { itemRouterFactory } from "./item-router";
 import fileRouter from "./file-router";
@@ -58,5 +59,9 @@ new MongoClient().connect("mongodb://db:27017/ttg").then(async db => {
         res.status(500).send("error");
     })
 
-    createServer(app as any).listen(8000, () => console.log("listening"));
+    createServer({
+        key: fs.readFileSync(__dirname + "/../server.key"),
+        cert: fs.readFileSync(__dirname + "/../server.crt")
+    }, app as any)
+        .listen(8000, () => console.log("listening"));
 })
