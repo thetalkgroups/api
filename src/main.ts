@@ -22,7 +22,7 @@ new MongoClient().connect("mongodb://db:27017/ttg").then(async db => {
 
     const app = express();
 
-    app.use(cors({ origin: "https://thetalkgroups.github.io" }));
+    app.use(cors({ origin: "https://thetalkgroups.github.io, http://localhost:4000" }));
 
     app.use(wrap(async (req, res, next) => {
         const userId = req.header("Authorization");
