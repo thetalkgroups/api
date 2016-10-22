@@ -8,6 +8,8 @@ services:
             - db
         links:
             - db
+        volumes:
+            - ./user-content:/app/user-content
     db:
         image: mongo:latest
         ports:
