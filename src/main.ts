@@ -22,6 +22,8 @@ new MongoClient().connect("mongodb://db:27017/ttg").then(async db => {
 
     const app = express();
 
+    app.use(cors());
+
     app.use((req: Request, res: express.Response, next: () => void) => {
         const origin = req.headers["origin"];
         
@@ -36,7 +38,7 @@ new MongoClient().connect("mongodb://db:27017/ttg").then(async db => {
     });
 
     app.use(wrap(async (req, res, next) => {
-        const userId = req.header("Authorization");
+        const userId = req.headers["Authorization"];
 
         if (userId === "UNSET") return next();
 
