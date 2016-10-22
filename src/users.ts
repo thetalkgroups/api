@@ -22,7 +22,7 @@ export type users = {
 export const usersFactory = async (db: Db): Promise<users> => {
     const userCollection = db.collection("users");
     const adminUsers = (await userCollection.find({ permission: "admin" }).toArray())
-        .map(user => user._id) as string[];
+        .map(({ userId }) => userId) as string[];
 
     const getUsers = () => userCollection.find({}, { userId: 0 }).toArray() as Promise<{ _id: string, permisison: string, user: User }[]>;
 
