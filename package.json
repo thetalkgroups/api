@@ -21,7 +21,6 @@
     "mz": "^2.4.0"
   },
   "devDependencies": {
-    "rollup": "^0.36.3",
     "typescript": "^2.0.3",
     "typings": "^1.4.0"
   },

@@ -25,13 +25,11 @@ new MongoClient().connect("mongodb://db:27017/ttg").then(async db => {
     app.use((req: Request, res: express.Response, next: () => void) => {
         const origin = req.headers["origin"];
         
-        console.log(req.headers)
-
         if (origin === "http://localhost:4000") {
-            res.setHeader("allow-control-allow-origin", "http://localhost:4000");
+            res.setHeader("access-control-allow-origin", "http://localhost:4000");
         }
         else if (origin === "https://thetalkgroups.github.io") {
-            res.setHeader("allow-control-allow-origin", "https://thetalkgroups.github.io");
+            res.setHeader("access-control-allow-origin", "https://thetalkgroups.github.io");
         }
 
         next();
