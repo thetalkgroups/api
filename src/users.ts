@@ -8,14 +8,15 @@ export enum UserStatus {
 }
 
 export type users = {
-    checkUserStatus: (userId: string) => Promise<UserStatus>
-    isAdmin: (userId: string) => boolean
-    authorizeQuery: (userId: string, query: any) => { "user.id": string }
-    setPermission: (userId: string) => (item: { user: User; permission: string; }) => { user: User; permission: string; }
-    getUsers(): Promise<{ _id: string, permisison: string, user: User }[]>
-    kickUser(prefix: string, itemId: string, kickTime: number): Promise<void>
-    banUser(prefix: string, itemId: string): Promise<void>
-    unbanUser(id: string): Promise<boolean>
+    checkUserStatus: (userId: string) => Promise<UserStatus>;
+    isAdmin: (userId: string) => boolean;
+    authorizeQuery: (userId: string, query: any) => { "user.id": string };
+    setPermission: (userId: string) => (item: { user: User; permission: string; }) => { user: User; permission: string; };
+    getUsers: () => Promise<{ _id: string, permisison: string, user: User }[]>;
+    kickUser: (prefix: string, itemId: string, kickTime: number) => Promise<void>;
+    banUser: (prefix: string, itemId: string) => Promise<void>;
+    removePermission: (id: string) => Promise<boolean>
+    updateKick: (id: string, kickTime: number) => Promise<void>
 }
 
 export const usersFactory = async (db: Db): Promise<users> => {
@@ -23,7 +24,7 @@ export const usersFactory = async (db: Db): Promise<users> => {
     const adminUsers = (await userCollection.find({ permission: "admin" }).toArray())
         .map(user => user._id) as string[];
 
-    const getUsers = () => userCollection.find().toArray() as Promise<{ _id: string, permisison: string, user: User }[]>;
+    const getUsers = () => userCollection.find({}, { userId: 0 }).toArray() as Promise<{ _id: string, permisison: string, user: User }[]>;
 
     const updateKickedUsers = async () =>
         await userCollection.remove({ permission: "kicked", releaseTime: { $lte: Date.now() } });
@@ -35,36 +36,45 @@ export const usersFactory = async (db: Db): Promise<users> => {
     }
     const kickUser = async (prefix: string, itemId: string, kickTime: number) => {
         const user = await getUser(prefix, itemId);
+        const userId = user.id;
+
+        delete user.id;
 
         await userCollection.insertOne({ 
-            _id: user.id, 
+            userId,
             permission: "kicked", 
             releaseTime: Date.now() + kickTime, 
-            user 
-        })
+            user
+        });
     } 
+    const updateKick = async (id: string, kickTime: number) =>
+        await userCollection.updateOne({ _id: new ObjectID(id) }, { $set: { kickTime }});
+
     const banUser = async (prefix: string, itemId: string) => {
         const user = await getUser(prefix, itemId);
+        const userId = user.id;
+
+        delete user.id;
 
         await userCollection.insertOne({
-            _id: user.id,
+            userId,
             permission: "banned",
             user
         })
     }
-    const unbanUser = async (id: string) =>
-        await userCollection.remove({ _id: id, permission: "banned" })
+    const removePermission = async (id: string) =>
+        await userCollection.remove({ _id: new ObjectID(id) })
             .then(result => result.result.n === 1);
 
-    const checkUserStatus = async (userId: string) => {
-        if (!userId) {
+    const checkUserStatus = async (checkedUserId: string) => {
+        if (!checkedUserId) {
             return UserStatus.error;
         }
 
-        const bannedUsers = (await userCollection.find({ permission: "banned" }).toArray()) as { _id: string }[];
-        const kickedUsers = (await userCollection.find({ permission: "kicked" }).toArray()) as { _id: string }[];
-        const userIsBanned = !!bannedUsers.find(user => userId === user._id);
-        const userIsKicked = !!kickedUsers.find(user => user._id === userId);
+        const bannedUsers = (await userCollection.find({ permission: "banned" }).toArray()) as { userId: string }[];
+        const kickedUsers = (await userCollection.find({ permission: "kicked" }).toArray()) as { userId: string }[];
+        const userIsBanned = !!bannedUsers.find(({ userId }) => userId === checkedUserId);
+        const userIsKicked = !!kickedUsers.find(({ userId }) => userId === checkedUserId);
 
         if (userIsKicked) return UserStatus.kicked;
         if (userIsBanned) return UserStatus.banned;
@@ -92,5 +102,15 @@ export const usersFactory = async (db: Db): Promise<users> => {
         return item;
     };
 
-    return { checkUserStatus, isAdmin, authorizeQuery, setPermission, getUsers, kickUser, banUser, unbanUser }
+    return { 
+        checkUserStatus, 
+        isAdmin, 
+        authorizeQuery, 
+        setPermission, 
+        getUsers, 
+        kickUser, 
+        banUser, 
+        updateKick,
+        removePermission
+    }
 }

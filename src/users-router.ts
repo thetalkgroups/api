@@ -40,6 +40,19 @@ export const userRouterFactory = (users: users) => {
         res.send("OK");        
     }));
 
+    router.post("/kick/:id/:kickTime", wrap(async (req, res) => {
+        const userId = req.header("Authorization");
+        const kickTime = parseInt(req.params["kickTime"], 10) || 0;
+        const { id } = req.params;
+
+        if (!users.isAdmin(userId))
+            return res.status(403).send("you are not authorized");
+
+        await users.updateKick(id, kickTime);
+
+        res.send("OK");
+    }))
+
     router.put("/ban", wrap(async (req, res) => {
         const userId = req.header("Authorization");
         const { prefix, itemId } = req.body as { prefix: string, itemId: string };
@@ -52,14 +65,14 @@ export const userRouterFactory = (users: users) => {
         res.send("OK");
     }))
 
-    router.delete("/ban/:id", wrap(async (req, res) => {
+    router.post("/remove/:id", wrap(async (req, res) => {
         const userId = req.header("Authorization");
         const { id } = req.params;
 
         if (!users.isAdmin(userId))
             return res.status(403).send("you are not authorized");
 
-        await users.unbanUser(id);
+        await users.removePermission(id)
 
         res.send("OK");
     }))
