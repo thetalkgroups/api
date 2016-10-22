@@ -28,7 +28,7 @@ const escapeHtml = (content: any) => {
 
 const SORT = { sticky: -1, date: -1 };
 
-export const itemRouterFactory = async (collectionName: string, group: string, users: users, db: Db) => {
+export const itemRouterFactory = (users: users, db: Db) => async (collectionName: string, group: string)=> {
     const itemCollection = db.collection(`${group}-${collectionName}`);
     const replyCollection = db.collection(`${group}-${collectionName}-replys`);
     

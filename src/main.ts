@@ -17,7 +17,7 @@ const wrap: (listener: (req: Request, res: express.Response, next?: () => void) 
 new MongoClient().connect("mongodb://db:27017/ttg").then(async db => {
     const userCollection = db.collection("users");
     const users = await usersFactory(db);
-    const itemRouter = await itemRouterFactory("questions", "thc", users, db);
+    const itemRouter = itemRouterFactory(users, db);
     const usersRouter = userRouterFactory(users);
 
     const app = express();
@@ -54,9 +54,9 @@ new MongoClient().connect("mongodb://db:27017/ttg").then(async db => {
         }
     }));
 
-    app.use("/thc/questions", itemRouter);
-    app.use("/thc/tips-and-tricks", itemRouter);
-    app.use("/thc/trip-reports", itemRouter);
+    app.use("/thc/questions", await itemRouter("questions", "thc"));
+    app.use("/thc/tips-and-tricks", await itemRouter("tips-and-tricks", "thc"));
+    app.use("/thc/trip-reports", await itemRouter("trip-reports", "thc"));
 
     app.use("/files", fileRouter);
 
