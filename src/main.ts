@@ -55,6 +55,8 @@ new MongoClient().connect("mongodb://db:27017/ttg").then(async db => {
     }));
 
     app.use("/thc/questions", itemRouter);
+    app.use("/thc/tips-and-tricks", itemRouter);
+    app.use("/thc/trip-reports", itemRouter);
 
     app.use("/files", fileRouter);
 
