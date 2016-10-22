@@ -38,7 +38,7 @@ new MongoClient().connect("mongodb://db:27017/ttg").then(async db => {
     });
 
     app.use(wrap(async (req, res, next) => {
-        const userId = req.headers["Authorization"];
+        const userId = req.headers["authorization"];
 
         if (userId === "UNSET") return next();
 
